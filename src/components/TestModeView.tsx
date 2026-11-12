@@ -132,13 +132,38 @@ export default function TestModeView({
   }
 
   const current = pool[currentIndex % pool.length];
-  const isAnswered = selectedOption !== null;
-  const isCorrect = selectedOption === current.item.correct;
 
-  const handleSelectOption = (idx: number) => {
-    if (isAnswered) return;
-    setSelectedOption(idx);
-    const ok = idx === current.item.correct;
+  // Deterministically shuffle options based on question ID + question prompt + seed
+  // so each question displays options in pseudo-random order (uniform ~25% distribution across А, Б, В, Г)
+  const displayOptions = useMemo(() => {
+    if (!current) return [];
+    const items = current.item.options.map((text, originalIndex) => ({
+      text,
+      originalIndex,
+    }));
+    let hash = 0;
+    const str = `${current.id}:${current.item.q}:${seed}`;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.abs(Math.sin(hash * 41 + i * 17)) * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    return items;
+  }, [current, seed]);
+
+  const isAnswered = selectedOption !== null;
+  const isCorrect =
+    selectedOption !== null &&
+    displayOptions[selectedOption]?.originalIndex === current?.item.correct;
+
+  const handleSelectOption = (displayIdx: number) => {
+    if (isAnswered || !current) return;
+    setSelectedOption(displayIdx);
+    const chosenOriginalIdx = displayOptions[displayIdx]?.originalIndex;
+    const ok = chosenOriginalIdx === current.item.correct;
     setSessionTotal((t) => t + 1);
     onRecordMcq(current.question.id, ok);
 
@@ -152,7 +177,7 @@ export default function TestModeView({
         subject: current.question.subject,
         source: "mcq",
         prompt: current.item.q,
-        userAnswer: current.item.options[idx] || "",
+        userAnswer: displayOptions[displayIdx]?.text || "",
         expectedAnswer: current.item.options[current.item.correct] || "",
         explanation: current.item.explain,
         missedArticles: current.question.articles,
@@ -310,14 +335,17 @@ export default function TestModeView({
 
         {/* Options List */}
         <div className="space-y-3.5">
-          {current.item.options.map((opt, idx) => {
+          {displayOptions.map((optItem, displayIdx) => {
+            const isThisCorrect = optItem.originalIndex === current.item.correct;
+            const isThisSelected = displayIdx === selectedOption;
+
             let btnStyle =
               "border-slate-800 bg-slate-950/80 text-slate-100 hover:border-indigo-500/60 hover:bg-slate-900";
             if (isAnswered) {
-              if (idx === current.item.correct) {
+              if (isThisCorrect) {
                 btnStyle =
                   "border-emerald-500 bg-emerald-500/15 text-emerald-100 font-bold ring-1 ring-emerald-500/40";
-              } else if (idx === selectedOption) {
+              } else if (isThisSelected) {
                 btnStyle = "border-rose-500 bg-rose-500/20 text-rose-100";
               } else {
                 btnStyle = "border-slate-800/60 bg-slate-950/40 text-slate-500";
@@ -326,19 +354,19 @@ export default function TestModeView({
 
             return (
               <button
-                key={idx}
+                key={displayIdx}
                 disabled={isAnswered}
-                onClick={() => handleSelectOption(idx)}
+                onClick={() => handleSelectOption(displayIdx)}
                 className={`w-full flex items-start gap-3.5 rounded-xl border p-4 sm:p-5 text-left text-base sm:text-lg transition ${btnStyle}`}
               >
                 <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg border border-current/30 text-sm sm:text-base font-extrabold">
-                  {["А", "Б", "В", "Г"][idx] || idx + 1}
+                  {["А", "Б", "В", "Г"][displayIdx] || displayIdx + 1}
                 </span>
-                <span className="flex-1 leading-relaxed">{opt}</span>
-                {isAnswered && idx === current.item.correct && (
+                <span className="flex-1 leading-relaxed">{optItem.text}</span>
+                {isAnswered && isThisCorrect && (
                   <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0 mt-0.5" />
                 )}
-                {isAnswered && idx === selectedOption && idx !== current.item.correct && (
+                {isAnswered && isThisSelected && !isThisCorrect && (
                   <XCircle className="h-6 w-6 text-rose-400 shrink-0 mt-0.5" />
                 )}
               </button>
