@@ -189,9 +189,9 @@ export default function CatalogView({
                       Статьи: {q.articles.slice(0, 3).join(", ")}
                     </span>
                   </div>
-                  <h3 className="text-sm sm:text-base font-bold text-white">{q.text}</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-white">{q.text}</h3>
                   {q.gaps && (
-                    <div className="text-xs text-amber-300/90">
+                    <div className="text-xs sm:text-sm text-amber-300/90 font-medium">
                       <strong>Что дополнено в конспект:</strong> {q.gaps}
                     </div>
                   )}
@@ -266,32 +266,54 @@ export default function CatalogView({
 
                   {/* Full Model Answer */}
                   <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-2">
-                    <div className="text-xs font-bold uppercase tracking-wider text-indigo-300">
-                      Эталонный ответ на экзамене
+                    <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-300">
+                      Эталонный устный ответ на экзамене
                     </div>
-                    <div className="text-sm text-slate-200 whitespace-pre-line leading-relaxed">
+                    <div className="text-base sm:text-lg text-slate-100 whitespace-pre-line leading-relaxed">
                       {q.answer}
                     </div>
                   </div>
 
+                  {/* Practical Case Study */}
+                  {q.caseStudy && (
+                    <div className="rounded-xl border border-indigo-500/30 bg-slate-900/90 p-5 space-y-3">
+                      <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-300">
+                        ⚡ Практический казус к вопросу: {q.caseStudy.caseTitle}
+                      </div>
+                      <div className="text-sm sm:text-base text-slate-200 leading-relaxed bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+                        <strong className="text-white block mb-1">Фабула:</strong> {q.caseStudy.facts}
+                        <div className="mt-2.5 pt-2 border-t border-slate-800 text-amber-300 font-bold">
+                          Вопрос: {q.caseStudy.question}
+                        </div>
+                      </div>
+                      <div className="text-sm sm:text-base text-slate-200 leading-relaxed bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/30">
+                        <strong className="text-emerald-300 block mb-1">Решение и квалификация:</strong>
+                        <div className="whitespace-pre-line text-slate-100">{q.caseStudy.solution}</div>
+                        <div className="mt-2 text-xs font-mono text-emerald-400">
+                          Нормативная база: {q.caseStudy.articles.join(", ")}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Traps & Followups */}
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-950/15 p-4 space-y-1.5">
-                      <div className="text-xs font-bold text-amber-300">
-                        Ловушки квалификации:
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-950/15 p-5 space-y-2">
+                      <div className="text-xs sm:text-sm font-bold text-amber-300">
+                        Ловушки квалификации на экзамене:
                       </div>
-                      <ul className="list-disc list-inside space-y-1 text-xs text-slate-200">
+                      <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
                         {q.traps.map((t, i) => (
                           <li key={i}>{t}</li>
                         ))}
                       </ul>
                     </div>
 
-                    <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/15 p-4 space-y-1.5">
-                      <div className="text-xs font-bold text-indigo-300">
+                    <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/15 p-5 space-y-2">
+                      <div className="text-xs sm:text-sm font-bold text-indigo-300">
                         Дополнительные вопросы экзаменатора:
                       </div>
-                      <ul className="list-decimal list-inside space-y-1 text-xs text-slate-200">
+                      <ul className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
                         {q.followups.map((f, i) => (
                           <li key={i}>{f}</li>
                         ))}

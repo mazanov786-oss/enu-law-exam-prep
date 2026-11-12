@@ -25,6 +25,7 @@ export function getDefaultState(): UserStudyState {
     },
     streakDays: 1,
     lastStudyDate: new Date().toISOString().slice(0, 10),
+    fontSize: "lg",
   };
 }
 
@@ -42,6 +43,7 @@ export function loadStudyState(): UserStudyState {
       deadlines: { ...def.deadlines, ...(parsed.deadlines || {}) },
       streakDays: parsed.streakDays || 1,
       lastStudyDate: parsed.lastStudyDate || def.lastStudyDate,
+      fontSize: parsed.fontSize || "lg",
     };
   } catch {
     return getDefaultState();

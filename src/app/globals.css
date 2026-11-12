@@ -6,16 +6,35 @@
   color-scheme: dark;
 }
 
+html {
+  font-size: 17.5px; /* Default larger base font size for crisp readability */
+  scroll-behavior: smooth;
+}
+
+html.font-size-md {
+  font-size: 16px;
+}
+
+html.font-size-lg {
+  font-size: 18.5px;
+}
+
+html.font-size-xl {
+  font-size: 21px;
+}
+
 body {
   background-color: #020617;
   color: #f8fafc;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Custom sleek scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: #0f172a;
@@ -23,6 +42,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #334155;
   border-radius: 9999px;
+  border: 2px solid #0f172a;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;

@@ -146,23 +146,23 @@ export default function ErrorJournalView({
       {showTrapsBank ? (
         /* Complete Examiner Traps Bank */
         <div className="space-y-4">
-          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-xs text-amber-200">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 text-sm sm:text-base text-amber-200">
             Здесь собраны все <strong>ловушки квалификации и частые ошибки студентов</strong> по каждому вопросу силлабуса {db.subjects[activeSubject].title}.
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {subjectQuestions.map((q) => (
               <div
                 key={q.id}
-                className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2"
+                className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-2.5 shadow-md"
               >
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-bold text-indigo-300">
+                <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
+                  <span className="font-extrabold text-indigo-300">
                     Вопрос №{q.n} (Модуль {q.module})
                   </span>
-                  <span className="text-slate-400">{q.articles.slice(0, 2).join(", ")}</span>
+                  <span className="text-slate-400 font-mono">{q.articles.slice(0, 2).join(", ")}</span>
                 </div>
-                <h4 className="text-sm font-bold text-white">{q.text}</h4>
-                <ul className="list-disc list-inside space-y-1 text-xs text-amber-200/90 pt-1">
+                <h4 className="text-base sm:text-lg font-bold text-white">{q.text}</h4>
+                <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-amber-200/90 pt-1 leading-relaxed">
                   {q.traps.map((t, idx) => (
                     <li key={idx}>{t}</li>
                   ))}

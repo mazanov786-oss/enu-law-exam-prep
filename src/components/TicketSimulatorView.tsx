@@ -31,6 +31,7 @@ import {
   ChevronRight,
   Brain,
   Volume2,
+  Scale,
 } from "lucide-react";
 
 interface TicketSimulatorViewProps {
@@ -65,6 +66,7 @@ export default function TicketSimulatorView({
   const [aiResult, setAiResult] = useState<Record<number, any>>({});
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [showPlanHint, setShowPlanHint] = useState<boolean>(false);
+  const [showCaseSolution, setShowCaseSolution] = useState<boolean>(false);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [timerRunning, setTimerRunning] = useState<boolean>(true);
   const [ticketFinished, setTicketFinished] = useState<boolean>(false);
@@ -78,6 +80,7 @@ export default function TicketSimulatorView({
       setEvaluations([null, null, null]);
       setAiResult({});
       setShowPlanHint(false);
+      setShowCaseSolution(false);
       setElapsedSec(0);
       setTimerRunning(true);
       setTicketFinished(false);
@@ -120,121 +123,146 @@ export default function TicketSimulatorView({
     toggleListening,
   } = useSpeechRecognition(handleVoiceChunk);
 
-  if (!questions) return null;
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  if (!questions) {
+    return (
+      <div className="flex h-64 items-center justify-center text-slate-400 text-sm">
+        Формирование экзаменационного билета...
+      </div>
+    );
+  }
 
   const currentQuestion = questions[activeIdx];
   const currentAnswer = answers[activeIdx];
   const currentEval = evaluations[activeIdx];
   const currentAi = aiResult[activeIdx];
 
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  };
-
-  const handleEvaluateCurrent = async () => {
+  const handleEvaluateCurrent = () => {
     if (isListening) stopListening();
-    const res = evaluateOralAnswer(currentAnswer, currentQuestion);
-    const nextEvals: [
-      OralEvaluationResult | null,
-      OralEvaluationResult | null,
-      OralEvaluationResult | null
-    ] = [...evaluations] as any;
-    nextEvals[activeIdx] = res;
-    setEvaluations(nextEvals);
 
-    onRecordQuestionScore(currentQuestion.id, res.score);
+    const result = evaluateOralAnswer(currentAnswer, currentQuestion);
+    setEvaluations((prev) => {
+      const next = [...prev] as [
+        OralEvaluationResult | null,
+        OralEvaluationResult | null,
+        OralEvaluationResult | null
+      ];
+      next[activeIdx] = result;
+      return next;
+    });
 
-    // Log to error journal if score < 75 or missed important articles
-    if (res.score < 75 || res.missedArticles.length > 0) {
+    onRecordQuestionScore(currentQuestion.id, result.score);
+
+    // If score is weak or articles missed, log into Error Journal
+    if (result.score < 70 || result.missedArticles.length > 0) {
       onAddError({
         questionId: currentQuestion.id,
         subject: currentQuestion.subject,
         source: "ticket",
-        prompt: `Устный ответ по билету: Вопрос №${currentQuestion.n}. ${currentQuestion.text}`,
-        userAnswer: currentAnswer || "(Ответ не дан)",
+        prompt: `Устный ответ на билетный вопрос №${currentQuestion.n}: ${currentQuestion.text}`,
+        userAnswer: currentAnswer || "(ответ не был дан или не содержал ключевых норм)",
         expectedAnswer: currentQuestion.answer,
-        explanation: `Оценка ответа: ${res.grade.letter} (${res.score}%). Не упомянуты статьи: ${
-          res.missedArticles.join(", ") || "нет"
-        }. Пропущены понятия: ${res.missedKeywords.slice(0, 5).join(", ")}.`,
-        missedArticles: res.missedArticles,
-        missedKeywords: res.missedKeywords,
+        explanation: result.feedbackSummary,
+        missedArticles: result.missedArticles,
+        missedKeywords: result.missedKeywords,
       });
     }
   };
 
+  const handleSelfGrade = (score: number) => {
+    const result = evaluateOralAnswer(currentAnswer, currentQuestion);
+    result.score = score;
+    result.grade = getEnuGrade(score);
+    setEvaluations((prev) => {
+      const next = [...prev] as [
+        OralEvaluationResult | null,
+        OralEvaluationResult | null,
+        OralEvaluationResult | null
+      ];
+      next[activeIdx] = result;
+      return next;
+    });
+    onRecordQuestionScore(currentQuestion.id, score);
+  };
+
   const handleRunAiExaminer = async () => {
-    if (!currentAnswer.trim()) return;
+    if (!state.deadlines.geminiApiKey || !currentAnswer.trim()) return;
     setAiLoading(true);
     try {
-      const resp = await fetch("/api/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          questionText: currentQuestion.text,
-          referenceAnswer: currentQuestion.answer,
-          articles: currentQuestion.articles,
-          plan: currentQuestion.plan,
-          userAnswer: currentAnswer,
-          apiKey: state.deadlines.geminiApiKey,
-        }),
-      });
-      const data = await resp.json();
-      setAiResult((prev) => ({ ...prev, [activeIdx]: data }));
-      if (typeof data.score === "number") {
-        onRecordQuestionScore(currentQuestion.id, data.score);
+      const prompt = `Ты строгий профессор юридического факультета ЕНУ им. Л. Н. Гумилева. Экзамен по дисциплине «${
+        activeSubject === "up" ? "Уголовное право РК (Общая часть)" : "Гражданское право РК (Общая часть)"
+      }».
+Вопрос билета: «${currentQuestion.text}».
+Нормативная база (статьи кодекса РК): ${currentQuestion.articles.join(", ")}.
+Ключевые понятия: ${currentQuestion.keywords.join(", ")}.
+
+Ответ студента (распознанный голос):
+"""
+${currentAnswer}
+"""
+
+Проанализируй ответ и верни СТРОГО JSON следующего формата:
+{
+  "examinerComment": "Краткий отзыв (2-3 предложения) на устный ответ",
+  "mistakes": ["ошибка 1", "ошибка 2"],
+  "followupQuestion": "Сложный дополнительный вопрос на знание статей УК/ГК РК или квалификационный казус"
+}`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.deadlines.geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+        }
+      );
+      const json = await res.json();
+      const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) {
+        const parsed = JSON.parse(rawText);
+        setAiResult((prev) => ({ ...prev, [activeIdx]: parsed }));
       }
     } catch (e: any) {
       setAiResult((prev) => ({
         ...prev,
-        [activeIdx]: { error: e?.message || "Ошибка соединения" },
+        [activeIdx]: {
+          error: "Не удалось получить вердикт ИИ. Проверьте Gemini API ключ.",
+        },
       }));
     } finally {
       setAiLoading(false);
     }
   };
 
-  const handleSelfGrade = (overrideScore: number) => {
-    const baseEval = currentEval || evaluateOralAnswer(currentAnswer, currentQuestion);
-    const updated: OralEvaluationResult = {
-      ...baseEval,
-      score: overrideScore,
-      grade: getEnuGrade(overrideScore),
-    };
-    const nextEvals: [
-      OralEvaluationResult | null,
-      OralEvaluationResult | null,
-      OralEvaluationResult | null
-    ] = [...evaluations] as any;
-    nextEvals[activeIdx] = updated;
-    setEvaluations(nextEvals);
-    onRecordQuestionScore(currentQuestion.id, overrideScore);
-  };
-
   const handleFinishTicket = () => {
     if (isListening) stopListening();
     setTimerRunning(false);
 
-    // Ensure all 3 questions have an evaluation
+    // Compute automatic evaluations for un-evaluated questions
     const finalScores: [number, number, number] = [0, 0, 0];
-    const nextEvals: [
-      OralEvaluationResult | null,
-      OralEvaluationResult | null,
-      OralEvaluationResult | null
-    ] = [...evaluations] as any;
+    const finalEvals = [...evaluations] as typeof evaluations;
 
     for (let i = 0; i < 3; i++) {
-      if (!nextEvals[i]) {
+      if (!finalEvals[i]) {
         const ev = evaluateOralAnswer(answers[i], questions[i]);
-        nextEvals[i] = ev;
+        finalEvals[i] = ev;
         onRecordQuestionScore(questions[i].id, ev.score);
       }
-      finalScores[i] = nextEvals[i]!.score;
+      finalScores[i] = finalEvals[i]!.score;
     }
+    setEvaluations(finalEvals);
 
-    setEvaluations(nextEvals);
-    const avg = Math.round((finalScores[0] + finalScores[1] + finalScores[2]) / 3);
+    const avg = Math.round(
+      (finalScores[0] + finalScores[1] + finalScores[2]) / 3
+    );
     const grade = getEnuGrade(avg);
 
     onSaveTicketHistory({
@@ -270,17 +298,17 @@ export default function TicketSimulatorView({
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 lg:flex-row lg:items-center lg:justify-between shadow-lg">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-lg bg-indigo-500/20 border border-indigo-500/40 px-2.5 py-0.5 text-xs font-bold text-indigo-300">
+            <span className="rounded-lg bg-indigo-500/20 border border-indigo-500/40 px-3 py-1 text-xs sm:text-sm font-extrabold text-indigo-300">
               ЭКЗАМЕНАЦИОННЫЙ БИЛЕТ № {ticketNumber}
             </span>
-            <span className="text-xs text-slate-400">
-              Устный формат ЕНУ • 3 вопроса из разных разделов силлабуса
+            <span className="text-xs sm:text-sm text-slate-400">
+              Устный формат ЕНУ им. Л. Н. Гумилева • 3 вопроса + практический казус
             </span>
           </div>
-          <h2 className="mt-1.5 text-xl font-bold text-white">
+          <h2 className="mt-1.5 text-xl sm:text-2xl font-black text-white">
             {db.subjects[activeSubject].title}
           </h2>
         </div>
@@ -290,7 +318,7 @@ export default function TicketSimulatorView({
           <div className="inline-flex rounded-xl border border-slate-700 bg-slate-950 p-1">
             <button
               onClick={() => onSelectSubject("up")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-bold transition ${
                 activeSubject === "up"
                   ? "bg-rose-600 text-white"
                   : "text-slate-400 hover:text-white"
@@ -300,7 +328,7 @@ export default function TicketSimulatorView({
             </button>
             <button
               onClick={() => onSelectSubject("gp")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-bold transition ${
                 activeSubject === "gp"
                   ? "bg-sky-600 text-white"
                   : "text-slate-400 hover:text-white"
@@ -318,7 +346,7 @@ export default function TicketSimulatorView({
               setTicketMode(m);
               drawNewTicket(activeSubject, m);
             }}
-            className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-medium text-slate-200 focus:border-indigo-500 focus:outline-none"
+            className="rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
           >
             <option value="smart">Умный подбор (приоритет неизученных)</option>
             <option value="random">Чистый рандом (как на экзамене)</option>
@@ -326,46 +354,46 @@ export default function TicketSimulatorView({
           </select>
 
           {/* Timer */}
-          <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-200">
-            <Clock className="h-3.5 w-3.5 text-indigo-400" />
+          <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs sm:text-sm font-mono font-bold text-slate-200">
+            <Clock className="h-4 w-4 text-indigo-400" />
             <span>{formatTime(elapsedSec)}</span>
           </div>
 
           {/* New Ticket Button */}
           <button
             onClick={() => drawNewTicket(activeSubject, ticketMode)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition shadow-sm"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-indigo-500 transition shadow-sm"
           >
-            <Shuffle className="h-3.5 w-3.5" />
-            <span>Тянуть новый билет</span>
+            <Shuffle className="h-4 w-4" />
+            <span>Новый билет</span>
           </button>
         </div>
       </div>
 
       {/* Ticket Summary Banner when finished */}
       {ticketFinished && (
-        <div className="rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 p-6 shadow-xl">
+        <div className="rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/70 via-slate-900 to-slate-900 p-6 sm:p-8 shadow-2xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-300">
-                <Award className="h-4 w-4" />
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-300">
+                <Award className="h-5 w-5" />
                 <span>Итог сдачи экзаменационного билета №{ticketNumber}</span>
               </div>
-              <h3 className="text-2xl font-bold text-white">
+              <h3 className="text-2xl sm:text-3xl font-black text-white">
                 Итоговая оценка: {ticketGrade.letter} ({ticketGrade.traditional}) — {ticketAverage}%
               </h3>
-              <p className="text-sm text-slate-300">{ticketGrade.description}</p>
+              <p className="text-sm sm:text-base text-slate-300">{ticketGrade.description}</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className={`rounded-2xl border px-5 py-3 text-center ${ticketGrade.color}`}>
-                <div className="text-3xl font-extrabold">{ticketGrade.letter}</div>
-                <div className="text-xs opacity-80">GPA {ticketGrade.gpa}</div>
+              <div className={`rounded-2xl border px-6 py-4 text-center ${ticketGrade.color}`}>
+                <div className="text-3xl sm:text-4xl font-black">{ticketGrade.letter}</div>
+                <div className="text-xs sm:text-sm font-bold opacity-80">GPA {ticketGrade.gpa}</div>
               </div>
               <button
                 onClick={() => drawNewTicket(activeSubject, ticketMode)}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-bold text-white hover:bg-indigo-500 transition"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-black text-white hover:bg-indigo-500 transition shadow-lg"
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="h-5 w-5" />
                 Следующий билет
               </button>
             </div>
@@ -374,7 +402,7 @@ export default function TicketSimulatorView({
       )}
 
       {/* 3 Ticket Questions Selector Tabs */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
         {questions.map((q, idx) => {
           const ev = evaluations[idx];
           const isSelected = activeIdx === idx;
@@ -385,35 +413,36 @@ export default function TicketSimulatorView({
                 if (isListening) stopListening();
                 setActiveIdx(idx as 0 | 1 | 2);
                 setShowPlanHint(false);
+                setShowCaseSolution(false);
               }}
-              className={`flex flex-col justify-between rounded-2xl border p-4 text-left transition-all ${
+              className={`flex flex-col justify-between rounded-2xl border p-5 text-left transition-all ${
                 isSelected
-                  ? "border-indigo-500 bg-slate-900 shadow-lg shadow-indigo-500/10"
+                  ? "border-indigo-500 bg-slate-900 shadow-xl shadow-indigo-500/10 ring-1 ring-indigo-500/50"
                   : "border-slate-800 bg-slate-900/50 hover:border-slate-700"
               }`}
             >
               <div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs font-bold text-indigo-300">
-                    Вопрос {idx + 1} билета (№{q.n} в УМК)
+                  <span className="rounded-md bg-slate-800 px-2.5 py-1 text-xs sm:text-sm font-extrabold text-indigo-300">
+                    Вопрос {idx + 1} билета (№{q.n})
                   </span>
                   {ev ? (
-                    <span className={`rounded-md border px-2 py-0.5 text-xs font-bold ${ev.grade.color}`}>
+                    <span className={`rounded-md border px-2.5 py-0.5 text-xs sm:text-sm font-bold ${ev.grade.color}`}>
                       {ev.grade.letter} ({ev.score}%)
                     </span>
                   ) : answers[idx].trim() ? (
-                    <span className="text-xs text-amber-400">Черновик готов</span>
+                    <span className="text-xs sm:text-sm font-semibold text-amber-400">Черновик готов</span>
                   ) : (
-                    <span className="text-xs text-slate-500">Ожидает ответа</span>
+                    <span className="text-xs sm:text-sm text-slate-500">Ожидает ответа</span>
                   )}
                 </div>
-                <div className="mt-2 font-semibold text-sm text-white line-clamp-2">
+                <div className="mt-2.5 font-bold text-base sm:text-lg text-white line-clamp-2 leading-snug">
                   {q.text}
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
-                <span>Модуль {q.module}</span>
-                <span className="truncate max-w-[180px]">
+              <div className="mt-4 flex items-center justify-between text-xs sm:text-sm text-slate-400 pt-2.5 border-t border-slate-800/80">
+                <span className="font-semibold">Модуль {q.module}</span>
+                <span className="truncate max-w-[200px] text-indigo-300 font-mono">
                   {q.articles.slice(0, 2).join(", ")}
                 </span>
               </div>
@@ -424,37 +453,37 @@ export default function TicketSimulatorView({
 
       {/* Active Question Workspace */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Question, Voice Input & Answer Editor */}
-        <div className="lg:col-span-7 space-y-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-4">
+        {/* Left Column: Question, Practical Case, Voice Input & Answer Editor */}
+        <div className="lg:col-span-7 space-y-5 rounded-2xl border border-slate-800 bg-slate-900/90 p-6 sm:p-7 shadow-xl">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-5">
             <div>
-              <div className="flex items-center gap-2 text-xs text-indigo-400 font-semibold">
+              <div className="flex items-center gap-2 text-xs sm:text-sm text-indigo-400 font-bold">
                 <span>Вопрос {activeIdx + 1} из 3</span>
                 <span>•</span>
                 <span>Модуль {currentQuestion.module}</span>
                 <span>•</span>
                 <span>Конспект: {currentQuestion.notes.join(", ")}</span>
               </div>
-              <h3 className="mt-1 text-lg sm:text-xl font-bold text-white">
+              <h3 className="mt-2 text-xl sm:text-2xl font-black text-white leading-snug">
                 {currentQuestion.n}. {currentQuestion.text}
               </h3>
             </div>
 
             <button
               onClick={() => setShowPlanHint(!showPlanHint)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 transition"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-200 hover:bg-slate-700 transition"
             >
-              <HelpCircle className="h-3.5 w-3.5 text-amber-400" />
-              <span>{showPlanHint ? "Скрыть план-подсказку" : "Подсказка: план ответа"}</span>
+              <HelpCircle className="h-4 w-4 text-amber-400" />
+              <span>{showPlanHint ? "Скрыть план" : "План ответа"}</span>
             </button>
           </div>
 
           {showPlanHint && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs space-y-1.5">
-              <div className="font-bold text-amber-300">
-                Рекомендуемый план устного ответа (без раскрытия деталей):
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm sm:text-base space-y-2">
+              <div className="font-black text-amber-300">
+                Рекомендуемый план устного ответа на экзамене ЕНУ:
               </div>
-              <ol className="list-decimal list-inside space-y-1 text-slate-200">
+              <ol className="list-decimal list-inside space-y-1.5 text-slate-100">
                 {currentQuestion.plan.map((pt, i) => (
                   <li key={i}>{pt.replace(/^\d+\.\s*/, "")}</li>
                 ))}
@@ -462,13 +491,54 @@ export default function TicketSimulatorView({
             </div>
           )}
 
+          {/* Practical Case Study Block */}
+          {currentQuestion.caseStudy && (
+            <div className="rounded-2xl border border-indigo-500/30 bg-slate-950/70 p-5 space-y-3 shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2 text-sm sm:text-base font-black text-indigo-300">
+                  <Scale className="h-5 w-5 text-indigo-400" />
+                  <span>⚡ Практический казус к вопросу: {currentQuestion.caseStudy.caseTitle}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCaseSolution(!showCaseSolution)}
+                  className="rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-1.5 text-xs sm:text-sm font-bold text-indigo-200 hover:bg-indigo-500/25 transition"
+                >
+                  {showCaseSolution ? "Скрыть решение казуса" : "Показать решение казуса"}
+                </button>
+              </div>
+
+              <div className="text-sm sm:text-base text-slate-200 leading-relaxed bg-slate-900/90 rounded-xl p-4 sm:p-5 border border-slate-800/80">
+                <strong className="text-white block mb-1.5 font-bold">Фабула дела (ситуационная задача):</strong>
+                {currentQuestion.caseStudy.facts}
+                <div className="mt-3 pt-2.5 border-t border-slate-800 text-amber-300 font-bold">
+                  Вопрос экзаменатора: {currentQuestion.caseStudy.question}
+                </div>
+              </div>
+
+              {showCaseSolution && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 sm:p-5 space-y-2.5 text-sm sm:text-base">
+                  <strong className="text-emerald-300 block font-black">
+                    Юридический анализ и квалификация казуса:
+                  </strong>
+                  <div className="whitespace-pre-line leading-relaxed text-slate-100">
+                    {currentQuestion.caseStudy.solution}
+                  </div>
+                  <div className="pt-2 text-xs sm:text-sm font-mono text-emerald-400 font-bold">
+                    Нормативная база: {currentQuestion.caseStudy.articles.join(", ")}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Voice Recording Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/80 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/80 p-4">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={toggleListening}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition shadow-md ${
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-xs sm:text-sm font-black transition shadow-md ${
                   isListening
                     ? "bg-rose-600 text-white animate-pulse shadow-rose-500/30"
                     : "bg-indigo-600 text-white hover:bg-indigo-500"
@@ -476,23 +546,23 @@ export default function TicketSimulatorView({
               >
                 {isListening ? (
                   <>
-                    <MicOff className="h-4 w-4" />
-                    <span>Остановить запись голоса</span>
+                    <MicOff className="h-5 w-5" />
+                    <span>Остановить запись</span>
                   </>
                 ) : (
                   <>
-                    <Mic className="h-4 w-4" />
+                    <Mic className="h-5 w-5" />
                     <span>Отвечать голосом (RU)</span>
                   </>
                 )}
               </button>
-              <div className="text-xs text-slate-400">
+              <div className="text-xs sm:text-sm text-slate-300">
                 {isListening ? (
-                  <span className="text-rose-400 font-medium">
+                  <span className="text-rose-400 font-bold">
                     Идет распознавание речи... Говорите как на устном экзамене.
                   </span>
                 ) : isSupported ? (
-                  <span>Нажмите микрофон для устного ответа или печатайте тезисы ниже</span>
+                  <span>Нажмите микрофон для ответа или вводите тезисы ниже</span>
                 ) : (
                   <span className="text-amber-400">
                     Для голосового ввода используйте Chrome или Edge
@@ -508,7 +578,7 @@ export default function TicketSimulatorView({
                   next[activeIdx] = "";
                   setAnswers(next);
                 }}
-                className="text-xs text-slate-400 hover:text-rose-400"
+                className="text-xs sm:text-sm text-slate-400 hover:text-rose-400 font-medium"
               >
                 Очистить текст
               </button>
@@ -516,7 +586,7 @@ export default function TicketSimulatorView({
           </div>
 
           {speechError && (
-            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 text-xs sm:text-sm text-rose-300 font-medium">
               {speechError}
             </div>
           )}
@@ -531,23 +601,23 @@ export default function TicketSimulatorView({
                 next[activeIdx] = e.target.value;
                 setAnswers(next);
               }}
-              placeholder="Отвечайте устно через микрофон или введите основные тезисы: определение, признаки, номера статей УК/ГК РК, виды, примеры..."
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none leading-relaxed"
+              placeholder="Отвечайте устно через микрофон или введите ключевые тезисы: определение, статьи УК/ГК РК, классификация, решение задачи..."
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 sm:p-5 text-base sm:text-lg text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none leading-relaxed font-normal"
             />
             {interimText && (
-              <div className="mt-1 rounded-lg bg-indigo-950/70 border border-indigo-500/30 px-3 py-1.5 text-xs italic text-indigo-200">
+              <div className="mt-1 rounded-lg bg-indigo-950/70 border border-indigo-500/30 px-3.5 py-2 text-xs sm:text-sm italic text-indigo-200">
                 Распознается: «{interimText}...»
               </div>
             )}
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={handleEvaluateCurrent}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-md"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-xs sm:text-sm font-black text-white hover:bg-emerald-500 transition shadow-lg"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 <span>Проверить ответ и сверить с эталоном</span>
@@ -558,7 +628,7 @@ export default function TicketSimulatorView({
                   type="button"
                   disabled={aiLoading || !currentAnswer.trim()}
                   onClick={handleRunAiExaminer}
-                  className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/15 px-4 py-2.5 text-xs font-bold text-purple-200 hover:bg-purple-500/25 disabled:opacity-50 transition"
+                  className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/15 px-4 py-3 text-xs sm:text-sm font-bold text-purple-200 hover:bg-purple-500/25 disabled:opacity-50 transition"
                 >
                   <Brain className="h-4 w-4" />
                   <span>{aiLoading ? "ИИ проверяет..." : "ИИ-экзаменатор (Gemini)"}</span>
@@ -574,8 +644,9 @@ export default function TicketSimulatorView({
                     if (isListening) stopListening();
                     setActiveIdx((activeIdx + 1) as 0 | 1 | 2);
                     setShowPlanHint(false);
+                    setShowCaseSolution(false);
                   }}
-                  className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-5 py-3 text-xs sm:text-sm font-bold text-slate-200 hover:bg-slate-700"
                 >
                   <span>К вопросу {activeIdx + 2}</span>
                   <ChevronRight className="h-4 w-4" />
@@ -584,10 +655,10 @@ export default function TicketSimulatorView({
                 <button
                   type="button"
                   onClick={handleFinishTicket}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 shadow-lg"
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-xs sm:text-sm font-black text-white hover:bg-indigo-500 shadow-xl"
                 >
                   <Award className="h-4 w-4" />
-                  <span>Завершить билет (Итог по 3 вопросам)</span>
+                  <span>Завершить билет (Итог)</span>
                 </button>
               )}
             </div>
@@ -597,18 +668,18 @@ export default function TicketSimulatorView({
         {/* Right Column: Evaluation, Reference Answer, Traps & Examiner Follow-ups */}
         <div className="lg:col-span-5 space-y-4">
           {!currentEval ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center space-y-3">
-              <BookOpen className="mx-auto h-10 w-10 text-slate-500" />
-              <h4 className="text-base font-bold text-white">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8 text-center space-y-4">
+              <BookOpen className="mx-auto h-12 w-12 text-slate-500" />
+              <h4 className="text-base sm:text-lg font-black text-white">
                 Эталонный ответ, статьи и доп. вопросы скрыты во время ответа
               </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
                 Сначала сформулируйте ответ голосом или письменно и нажмите{" "}
-                <strong>«Проверить ответ и сверить с эталоном»</strong>. Система проверит названные вами статьи УК/ГК РК, ключевые понятия, покажет ловушки экзаменатора и выставит оценку по шкале ЕНУ.
+                <strong className="text-white">«Проверить ответ и сверить с эталоном»</strong>. Система проверит названные вами статьи УК/ГК РК, ключевые понятия, покажет ловушки экзаменатора и выставит оценку по шкале ЕНУ.
               </p>
               <button
                 onClick={handleEvaluateCurrent}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-300 hover:text-white"
               >
                 Показать эталонный ответ сразу (режим чтения)
               </button>
@@ -616,24 +687,26 @@ export default function TicketSimulatorView({
           ) : (
             <div className="space-y-4">
               {/* Score & Keyword/Article Radar */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6 space-y-4 shadow-xl">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-slate-400">Оценка за вопрос №{currentQuestion.n}</div>
-                    <div className="text-lg font-bold text-white">
+                    <div className="text-xs sm:text-sm font-semibold text-slate-400">
+                      Оценка за вопрос №{currentQuestion.n}
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-white">
                       {currentEval.grade.traditional} ({currentEval.score}%)
                     </div>
                   </div>
-                  <div className={`rounded-xl border px-3.5 py-1.5 text-lg font-extrabold ${currentEval.grade.color}`}>
+                  <div className={`rounded-xl border px-4 py-2 text-xl font-black ${currentEval.grade.color}`}>
                     {currentEval.grade.letter}
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-300">{currentEval.feedbackSummary}</p>
+                <p className="text-sm sm:text-base text-slate-200 leading-relaxed">{currentEval.feedbackSummary}</p>
 
                 {/* Articles Check */}
-                <div className="space-y-1.5">
-                  <div className="text-xs font-semibold text-slate-300">
+                <div className="space-y-2">
+                  <div className="text-xs sm:text-sm font-bold text-slate-300">
                     Нормативная база (Статьи НПА РК):
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -642,7 +715,7 @@ export default function TicketSimulatorView({
                       return (
                         <span
                           key={i}
-                          className={`rounded-md border px-2 py-0.5 text-xs font-medium ${
+                          className={`rounded-md border px-2.5 py-1 text-xs sm:text-sm font-bold ${
                             hit
                               ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
                               : "border-rose-500/40 bg-rose-500/15 text-rose-300"
@@ -657,9 +730,9 @@ export default function TicketSimulatorView({
                 </div>
 
                 {/* Keywords Check */}
-                <div className="space-y-1.5">
-                  <div className="text-xs font-semibold text-slate-300">
-                    Ключевые юридические понятия ({currentEval.matchedKeywords.length}/
+                <div className="space-y-2">
+                  <div className="text-xs sm:text-sm font-bold text-slate-300">
+                    Ключевые понятия ({currentEval.matchedKeywords.length}/
                     {currentQuestion.keywords.length}):
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -668,9 +741,9 @@ export default function TicketSimulatorView({
                       return (
                         <span
                           key={i}
-                          className={`rounded-md border px-2 py-0.5 text-xs ${
+                          className={`rounded-md border px-2.5 py-0.5 text-xs sm:text-sm ${
                             hit
-                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-semibold"
                               : "border-slate-700 bg-slate-800 text-slate-400"
                           }`}
                         >
@@ -683,24 +756,24 @@ export default function TicketSimulatorView({
                 </div>
 
                 {/* Self-Correction Grade Override */}
-                <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-slate-400">Самооценка после сверки:</span>
+                <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs sm:text-sm font-medium text-slate-400">Самооценка:</span>
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleSelfGrade(95)}
-                      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20"
+                      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs sm:text-sm font-bold text-emerald-300 hover:bg-emerald-500/20"
                     >
-                      Знаю отлично (A)
+                      Отлично (A)
                     </button>
                     <button
                       onClick={() => handleSelfGrade(80)}
-                      className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-semibold text-sky-300 hover:bg-sky-500/20"
+                      className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs sm:text-sm font-bold text-sky-300 hover:bg-sky-500/20"
                     >
                       Хорошо (B)
                     </button>
                     <button
                       onClick={() => handleSelfGrade(55)}
-                      className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20"
+                      className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs sm:text-sm font-bold text-amber-300 hover:bg-amber-500/20"
                     >
                       Повторить (D)
                     </button>
@@ -710,8 +783,8 @@ export default function TicketSimulatorView({
 
               {/* Optional AI Examiner Feedback */}
               {currentAi && (
-                <div className="rounded-2xl border border-purple-500/40 bg-purple-950/20 p-4 space-y-2 text-xs">
-                  <div className="font-bold text-purple-300 flex items-center gap-1.5">
+                <div className="rounded-2xl border border-purple-500/40 bg-purple-950/20 p-5 space-y-2.5 text-sm">
+                  <div className="font-black text-purple-300 flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4" />
                     <span>Вердикт ИИ-экзаменатора ЕНУ</span>
                   </div>
@@ -719,15 +792,15 @@ export default function TicketSimulatorView({
                     <div className="text-rose-300">{currentAi.error}</div>
                   ) : (
                     <>
-                      <p className="text-slate-200">{currentAi.examinerComment}</p>
+                      <p className="text-slate-200 leading-relaxed">{currentAi.examinerComment}</p>
                       {currentAi.mistakes?.length > 0 && (
                         <div>
-                          <span className="font-semibold text-rose-300">Неточности: </span>
+                          <span className="font-bold text-rose-300">Неточности: </span>
                           <span className="text-slate-300">{currentAi.mistakes.join("; ")}</span>
                         </div>
                       )}
                       {currentAi.followupQuestion && (
-                        <div className="rounded-lg bg-purple-950/50 p-2.5 border border-purple-500/30 text-purple-200">
+                        <div className="rounded-lg bg-purple-950/50 p-3 border border-purple-500/30 text-purple-200">
                           <strong>Вопрос на засыпку:</strong> {currentAi.followupQuestion}
                         </div>
                       )}
@@ -737,44 +810,44 @@ export default function TicketSimulatorView({
               )}
 
               {/* Reference Answer & Plan */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 space-y-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6 space-y-3.5 shadow-lg">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-indigo-300">
+                  <h4 className="text-sm sm:text-base font-black text-indigo-300">
                     Образцовый устный ответ на экзамене
                   </h4>
                   <button
                     onClick={() => speakText(currentQuestion.answer)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-300 hover:text-white"
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1 text-xs sm:text-sm text-slate-300 hover:text-white"
                     title="Озвучить ответ"
                   >
-                    <Volume2 className="h-3.5 w-3.5" />
+                    <Volume2 className="h-4 w-4" />
                     <span>Слушать</span>
                   </button>
                 </div>
-                <div className="text-xs sm:text-sm text-slate-200 whitespace-pre-line leading-relaxed">
+                <div className="text-base sm:text-lg text-slate-100 whitespace-pre-line leading-relaxed font-normal">
                   {currentQuestion.answer}
                 </div>
               </div>
 
               {/* Examiner Traps & Follow-up Questions */}
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-950/15 p-4 space-y-3">
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-950/15 p-5 space-y-3.5 shadow-md">
                 <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black text-amber-300">
                     <AlertTriangle className="h-4 w-4" />
                     <span>Ловушки квалификации (на чем валят на экзамене):</span>
                   </div>
-                  <ul className="mt-1.5 list-disc list-inside space-y-1 text-xs text-slate-200">
+                  <ul className="mt-2 list-disc list-inside space-y-1.5 text-xs sm:text-sm text-slate-100 leading-relaxed">
                     {currentQuestion.traps.map((t, i) => (
                       <li key={i}>{t}</li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="pt-2 border-t border-amber-500/20">
-                  <div className="text-xs font-bold text-indigo-300">
+                <div className="pt-3 border-t border-amber-500/20">
+                  <div className="text-xs sm:text-sm font-black text-indigo-300">
                     Дополнительные вопросы экзаменатора по билету:
                   </div>
-                  <ul className="mt-1.5 list-decimal list-inside space-y-1 text-xs text-slate-200">
+                  <ul className="mt-2 list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-slate-100 leading-relaxed">
                     {currentQuestion.followups.map((f, i) => (
                       <li key={i}>{f}</li>
                     ))}

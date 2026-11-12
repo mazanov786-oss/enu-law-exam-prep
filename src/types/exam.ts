@@ -12,11 +12,20 @@ export interface McqItem {
   options: string[];
   correct: number;
   explain: string;
+  isHard?: boolean;
 }
 
 export interface ClozeItem {
   text: string;
   hint: string;
+}
+
+export interface CaseStudy {
+  caseTitle: string;
+  facts: string;
+  question: string;
+  solution: string;
+  articles: string[];
 }
 
 export interface ExamQuestion {
@@ -37,6 +46,7 @@ export interface ExamQuestion {
   cloze: ClozeItem[];
   traps: string[];
   followups: string[];
+  caseStudy?: CaseStudy;
 }
 
 export interface SubjectMeta {
@@ -109,6 +119,7 @@ export interface UserStudyState {
   deadlines: ExamDeadlines;
   streakDays: number;
   lastStudyDate?: string;
+  fontSize?: "md" | "lg" | "xl";
 }
 
 export interface EnuGradeInfo {

@@ -266,7 +266,7 @@ export default function ClozeModeView({
         </div>
 
         {/* Interactive Sentence with Inline Blank Inputs */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-6 text-base sm:text-lg leading-loose text-slate-100">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-6 sm:p-8 text-lg sm:text-xl leading-loose text-slate-100 font-medium">
           {segments.map((seg, i) => {
             if (seg.type === "text") {
               return <span key={i}>{seg.content}</span>;
@@ -278,14 +278,14 @@ export default function ClozeModeView({
             let borderClass = "border-indigo-500/60 bg-indigo-950/30 text-indigo-200";
             if (checked) {
               borderClass = isOk
-                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                : "border-rose-500 bg-rose-500/20 text-rose-200";
+                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200 font-bold"
+                : "border-rose-500 bg-rose-500/20 text-rose-200 font-bold";
             } else if (activeBlankIdx === bIdx) {
               borderClass = "border-indigo-400 bg-indigo-950/60 text-white ring-2 ring-indigo-500/30";
             }
 
             return (
-              <span key={i} className="inline-flex items-center mx-1.5 align-baseline">
+              <span key={i} className="inline-flex items-center mx-2 align-baseline">
                 <input
                   type="text"
                   disabled={checked}
@@ -301,9 +301,9 @@ export default function ClozeModeView({
                   }}
                   placeholder={`пропуск #${bIdx + 1}`}
                   style={{
-                    width: `${Math.max(140, (seg.content.length + 4) * 10)}px`,
+                    width: `${Math.max(160, (seg.content.length + 4) * 12)}px`,
                   }}
-                  className={`rounded-lg border px-3 py-1 text-sm sm:text-base font-semibold focus:outline-none transition ${borderClass}`}
+                  className={`rounded-lg border px-3.5 py-1.5 text-base sm:text-lg font-bold focus:outline-none transition ${borderClass}`}
                 />
               </span>
             );
@@ -312,31 +312,31 @@ export default function ClozeModeView({
 
         {/* Verification Results */}
         {checked && (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 space-y-3">
+            <div className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-400">
               Эталонные значения пропусков ({current.item.hint}):
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {blankSegments.map((seg) => {
                 const idx = seg.blankIndex!;
                 const ok = results[idx];
                 return (
                   <div
                     key={idx}
-                    className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs ${
+                    className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm sm:text-base font-semibold ${
                       ok
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                         : "border-rose-500/40 bg-rose-500/10 text-rose-300"
                     }`}
                   >
                     {ok ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                     ) : (
-                      <XCircle className="h-4 w-4 text-rose-400" />
+                      <XCircle className="h-5 w-5 text-rose-400" />
                     )}
                     <span>
                       Пропуск #{idx + 1}:{" "}
-                      <strong>{(seg.options || [seg.content]).join(" ИЛИ ")}</strong>
+                      <strong className="text-white">{(seg.options || [seg.content]).join(" ИЛИ ")}</strong>
                     </span>
                   </div>
                 );
@@ -352,17 +352,17 @@ export default function ClozeModeView({
               <button
                 type="button"
                 onClick={handleCheck}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-md"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-black text-white hover:bg-emerald-500 transition shadow-lg"
               >
-                <CheckCircle2 className="h-4 w-4" />
+                <CheckCircle2 className="h-5 w-5" />
                 <span>Проверить вписанные термины</span>
               </button>
               <button
                 type="button"
                 onClick={handleRevealAnswers}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:text-white"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-xs sm:text-sm font-bold text-slate-300 hover:text-white"
               >
-                <Eye className="h-3.5 w-3.5" />
+                <Eye className="h-4 w-4" />
                 <span>Показать ответ</span>
               </button>
             </div>
@@ -373,10 +373,10 @@ export default function ClozeModeView({
           <button
             type="button"
             onClick={handleNext}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition"
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-black text-white hover:bg-indigo-500 transition shadow-lg"
           >
             <span>Следующая норма</span>
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="h-5 w-5" />
           </button>
         </div>
       </div>

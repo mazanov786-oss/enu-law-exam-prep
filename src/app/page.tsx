@@ -49,12 +49,27 @@ export default function ExamPrepApp() {
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const size = state.fontSize || "lg";
+      document.documentElement.classList.remove("font-size-md", "font-size-lg", "font-size-xl");
+      document.documentElement.classList.add(`font-size-${size}`);
+    }
+  }, [state.fontSize]);
+
   const updateState = (updater: (prev: UserStudyState) => UserStudyState) => {
     setState((prev) => {
       const next = updater(prev);
       saveStudyState(next);
       return next;
     });
+  };
+
+  const handleSetFontSize = (size: "md" | "lg" | "xl") => {
+    updateState((prev) => ({
+      ...prev,
+      fontSize: size,
+    }));
   };
 
   const handleRecordQuestionScore = (questionId: string, score: number) => {
@@ -239,76 +254,151 @@ export default function ExamPrepApp() {
               onClick={() => setActiveTab("dashboard")}
               className="flex items-center gap-2.5 text-left group"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
-                <GraduationCap className="h-5 w-5" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
+                <GraduationCap className="h-6 w-6" />
               </div>
               <div>
-                <div className="text-sm font-extrabold tracking-tight text-white group-hover:text-indigo-300 transition">
+                <div className="text-base font-black tracking-tight text-white group-hover:text-indigo-300 transition">
                   LEX.ENU • Экзаменационный Тренажер
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-xs text-slate-400">
                   Уголовное и Гражданское право РК (Общая часть)
                 </div>
               </div>
             </button>
 
-            {/* Mobile Subject Badge */}
-            <div className="flex lg:hidden items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1">
-              <button
-                onClick={() => setActiveSubject("up")}
-                className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-                  activeSubject === "up"
-                    ? "bg-rose-600 text-white"
-                    : "text-slate-400"
-                }`}
-              >
-                УП
-              </button>
-              <button
-                onClick={() => setActiveSubject("gp")}
-                className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-                  activeSubject === "gp"
-                    ? "bg-sky-600 text-white"
-                    : "text-slate-400"
-                }`}
-              >
-                ГП
-              </button>
+            {/* Mobile Subject Badge & Font Switcher */}
+            <div className="flex lg:hidden items-center gap-1.5">
+              <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1">
+                <button
+                  type="button"
+                  onClick={() => handleSetFontSize("md")}
+                  className={`rounded-lg px-2 py-0.5 text-xs font-bold ${
+                    (state.fontSize || "lg") === "md" ? "bg-indigo-600 text-white" : "text-slate-400"
+                  }`}
+                >
+                  А-
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetFontSize("lg")}
+                  className={`rounded-lg px-2 py-0.5 text-xs font-bold ${
+                    (state.fontSize || "lg") === "lg" ? "bg-indigo-600 text-white" : "text-slate-400"
+                  }`}
+                >
+                  А
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetFontSize("xl")}
+                  className={`rounded-lg px-2 py-0.5 text-xs font-bold ${
+                    state.fontSize === "xl" ? "bg-indigo-600 text-white" : "text-slate-400"
+                  }`}
+                >
+                  А+
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1">
+                <button
+                  onClick={() => setActiveSubject("up")}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
+                    activeSubject === "up"
+                      ? "bg-rose-600 text-white"
+                      : "text-slate-400"
+                  }`}
+                >
+                  УП
+                </button>
+                <button
+                  onClick={() => setActiveSubject("gp")}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
+                    activeSubject === "gp"
+                      ? "bg-sky-600 text-white"
+                      : "text-slate-400"
+                  }`}
+                >
+                  ГП
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                    isActive
-                      ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/30"
-                      : "text-slate-300 hover:bg-slate-900 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{item.label}</span>
-                  {item.badge !== undefined && (
-                    <span
-                      className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                        isActive
-                          ? "bg-white text-indigo-700"
-                          : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-3">
+            {/* Desktop Font Size Switcher */}
+            <div className="hidden lg:flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+              <span className="px-2 text-xs font-semibold text-slate-400">Шрифт:</span>
+              <button
+                type="button"
+                onClick={() => handleSetFontSize("md")}
+                title="Стандартный размер (16px)"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  (state.fontSize || "lg") === "md"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                А-
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetFontSize("lg")}
+                title="Крупный комфортный (18.5px)"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  (state.fontSize || "lg") === "lg"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                А (18px)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetFontSize("xl")}
+                title="Экстра-крупный (21px)"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  state.fontSize === "xl"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                А+ (21px)
+              </button>
+            </div>
+
+            {/* Navigation Tabs */}
+            <nav className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2 text-sm font-bold transition ${
+                      isActive
+                        ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/30"
+                        : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span
+                        className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                          isActive
+                            ? "bg-white text-indigo-700"
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
         </div>
       </header>
 

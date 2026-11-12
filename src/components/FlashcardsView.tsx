@@ -181,12 +181,12 @@ export default function FlashcardsView({
         </div>
 
         <div className="my-8 text-center space-y-4">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-300">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/80 px-3.5 py-1 text-xs sm:text-sm font-bold text-slate-300">
+            <Sparkles className="h-4 w-4 text-amber-400" />
             <span>{flipped ? "ОТВЕТ (ОБОРОТНАЯ СТОРОНА)" : "ВОПРОС КАРТОЧКИ"}</span>
           </div>
           <div
-            className={`text-xl sm:text-2xl font-bold leading-relaxed max-w-3xl mx-auto ${
+            className={`text-2xl sm:text-3xl font-black leading-relaxed max-w-3xl mx-auto tracking-tight ${
               flipped ? "text-emerald-300" : "text-white"
             }`}
           >
@@ -194,9 +194,9 @@ export default function FlashcardsView({
           </div>
         </div>
 
-        <div className="flex items-center justify-center text-xs text-slate-400">
+        <div className="flex items-center justify-center text-xs sm:text-sm text-slate-400 font-medium">
           <span className="inline-flex items-center gap-1.5">
-            <Eye className="h-3.5 w-3.5" />
+            <Eye className="h-4 w-4" />
             Нажмите на карточку, чтобы перевернуть
           </span>
         </div>
@@ -210,7 +210,7 @@ export default function FlashcardsView({
               setFlipped(false);
               setCurrentIndex((i) => (i - 1 + deck.length) % deck.length);
             }}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-xs sm:text-sm font-bold text-slate-300 hover:bg-slate-800"
           >
             <ChevronLeft className="h-4 w-4" />
             <span>Назад</span>
@@ -220,7 +220,7 @@ export default function FlashcardsView({
               setFlipped(false);
               setCurrentIndex((i) => (i + 1) % deck.length);
             }}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-xs sm:text-sm font-bold text-slate-300 hover:bg-slate-800"
           >
             <span>Пропустить</span>
             <ChevronRight className="h-4 w-4" />
@@ -230,27 +230,27 @@ export default function FlashcardsView({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full sm:w-auto">
           <button
             onClick={() => handleRate(-2)}
-            className="rounded-xl border border-rose-500/40 bg-rose-500/15 px-4 py-2.5 text-xs font-bold text-rose-300 hover:bg-rose-500/25 transition"
+            className="rounded-xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-xs sm:text-sm font-bold text-rose-300 hover:bg-rose-500/25 transition shadow-sm"
           >
             Снова (Не знал)
           </button>
           <button
             onClick={() => handleRate(0)}
-            className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2.5 text-xs font-bold text-amber-300 hover:bg-amber-500/25 transition"
+            className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-3 text-xs sm:text-sm font-bold text-amber-300 hover:bg-amber-500/25 transition shadow-sm"
           >
             Трудно (С запинкой)
           </button>
           <button
             onClick={() => handleRate(1)}
-            className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2.5 text-xs font-bold text-sky-300 hover:bg-sky-500/25 transition"
+            className="rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-3 text-xs sm:text-sm font-bold text-sky-300 hover:bg-sky-500/25 transition shadow-sm"
           >
             Хорошо (Уверенно)
           </button>
           <button
             onClick={() => handleRate(2)}
-            className="inline-flex items-center justify-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/25 transition"
+            className="inline-flex items-center justify-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-xs sm:text-sm font-bold text-emerald-300 hover:bg-emerald-500/25 transition shadow-sm"
           >
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="h-4 w-4" />
             <span>Легко (Наизусть)</span>
           </button>
         </div>
