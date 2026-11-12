@@ -120,6 +120,8 @@ export interface UserStudyState {
   streakDays: number;
   lastStudyDate?: string;
   fontSize?: "md" | "lg" | "xl";
+  syncKey?: string;
+  lastSyncedAt?: string;
 }
 
 export interface EnuGradeInfo {

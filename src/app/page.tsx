@@ -24,6 +24,7 @@ import ClozeModeView from "@/components/ClozeModeView";
 import FlashcardsView from "@/components/FlashcardsView";
 import ErrorJournalView from "@/components/ErrorJournalView";
 import CatalogView from "@/components/CatalogView";
+import SyncModal from "@/components/SyncModal";
 import {
   LayoutDashboard,
   Mic,
@@ -33,6 +34,8 @@ import {
   ShieldAlert,
   BookOpen,
   GraduationCap,
+  Cloud,
+  RefreshCw,
 } from "lucide-react";
 
 const examDb = rawExamData as unknown as ExamDatabase;
@@ -42,12 +45,91 @@ export default function ExamPrepApp() {
   const [activeSubject, setActiveSubject] = useState<SubjectId>("up");
   const [state, setState] = useState<UserStudyState>(getDefaultState);
   const [hydrated, setHydrated] = useState<boolean>(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncedText, setLastSyncedText] = useState<string>("Локально");
+
+  // Push state to Vercel Cloud
+  const pushToCloud = async (customState?: UserStudyState): Promise<boolean> => {
+    const s = customState || state;
+    const key = (s.syncKey || "timofey").trim().toLowerCase();
+    if (!key) return false;
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, state: s }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const timeStr = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        setLastSyncedText(`Синхронизировано (${timeStr})`);
+        updateState((prev) => ({ ...prev, lastSyncedAt: new Date().toISOString() }));
+        return true;
+      }
+    } catch (e) {
+      console.warn("Cloud push error:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+    return false;
+  };
+
+  // Pull state from Vercel Cloud
+  const pullFromCloud = async (customKey?: string): Promise<boolean> => {
+    const key = (customKey || state.syncKey || "timofey").trim().toLowerCase();
+    if (!key) return false;
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`/api/sync?key=${encodeURIComponent(key)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok && data.found && data.state) {
+        const cloudState = data.state as UserStudyState;
+        setState(cloudState);
+        saveStudyState(cloudState);
+        const timeStr = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        setLastSyncedText(`Синхронизировано (${timeStr})`);
+        return true;
+      }
+    } catch (e) {
+      console.warn("Cloud pull error:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+    return false;
+  };
 
   useEffect(() => {
     const loaded = loadStudyState();
     setState(loaded);
     setHydrated(true);
+
+    // Check if opened via magic link ?sync=...
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlSync = params.get("sync")?.trim().toLowerCase();
+      if (urlSync) {
+        loaded.syncKey = urlSync;
+        setState(loaded);
+        saveStudyState(loaded);
+        pullFromCloud(urlSync);
+      } else if (loaded.syncKey) {
+        pullFromCloud(loaded.syncKey);
+      }
+    }
   }, []);
+
+  // Debounced auto-push when progress changes (after 3.5 sec)
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = setTimeout(() => {
+      pushToCloud(state);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, [state.progress, state.errors, state.tickets, state.deadlines]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -299,6 +381,20 @@ export default function ExamPrepApp() {
                 </button>
               </div>
 
+              {/* Mobile Cloud Sync Button */}
+              <button
+                type="button"
+                onClick={() => setIsSyncModalOpen(true)}
+                title="Облачная синхронизация"
+                className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1.5 text-xs font-bold text-slate-300"
+              >
+                {isSyncing ? (
+                  <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
+                ) : (
+                  <Cloud className="h-4 w-4 text-indigo-400" />
+                )}
+              </button>
+
               <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1">
                 <button
                   onClick={() => setActiveSubject("up")}
@@ -365,6 +461,25 @@ export default function ExamPrepApp() {
                 А+ (21px)
               </button>
             </div>
+
+            {/* Desktop Cloud Sync Button */}
+            <button
+              type="button"
+              onClick={() => setIsSyncModalOpen(true)}
+              title="Синхронизация между ПК, ноутбуком и телефоном"
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:border-slate-700 transition"
+            >
+              {isSyncing ? (
+                <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
+              ) : (
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+              )}
+              <Cloud className="h-4 w-4 text-indigo-400" />
+              <span>Облако</span>
+            </button>
 
             {/* Navigation Tabs */}
             <nav className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
@@ -502,6 +617,18 @@ export default function ExamPrepApp() {
           </span>
         </div>
       </footer>
+
+      {/* Cloud Cross-Device Sync Modal */}
+      <SyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        state={state}
+        onUpdateState={updateState}
+        onPushToCloud={pushToCloud}
+        onPullFromCloud={pullFromCloud}
+        isSyncing={isSyncing}
+        lastSyncedText={lastSyncedText}
+      />
     </div>
   );
 }

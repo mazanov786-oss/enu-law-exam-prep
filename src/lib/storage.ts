@@ -26,6 +26,7 @@ export function getDefaultState(): UserStudyState {
     streakDays: 1,
     lastStudyDate: new Date().toISOString().slice(0, 10),
     fontSize: "lg",
+    syncKey: "timofey",
   };
 }
 
@@ -44,6 +45,8 @@ export function loadStudyState(): UserStudyState {
       streakDays: parsed.streakDays || 1,
       lastStudyDate: parsed.lastStudyDate || def.lastStudyDate,
       fontSize: parsed.fontSize || "lg",
+      syncKey: parsed.syncKey || "timofey",
+      lastSyncedAt: parsed.lastSyncedAt,
     };
   } catch {
     return getDefaultState();
