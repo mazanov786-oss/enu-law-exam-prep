@@ -70,11 +70,12 @@ export default function SelfRecallPanel({
   const {
     isListening,
     isSupported,
+    isTranscribing,
     interimText,
     error: speechError,
     toggleListening,
     stopListening,
-  } = useSpeechRecognition(handleVoiceChunk);
+  } = useSpeechRecognition(handleVoiceChunk, { geminiApiKey });
 
   const handleCheckAnswer = () => {
     if (isListening) stopListening();
@@ -214,8 +215,9 @@ export default function SelfRecallPanel({
 
         <button
           type="button"
+          disabled={isTranscribing}
           onClick={toggleListening}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:opacity-60 ${
             isListening
               ? "bg-rose-600 text-white animate-pulse"
               : "border border-slate-800 bg-slate-900 text-slate-300 hover:border-indigo-500/50 hover:text-white"
@@ -223,7 +225,9 @@ export default function SelfRecallPanel({
         >
           {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
           <span>
-            {isListening
+            {isTranscribing
+              ? "Расшифровка..."
+              : isListening
               ? "Остановить запись"
               : isSupported
               ? "Надиктовать голосом"

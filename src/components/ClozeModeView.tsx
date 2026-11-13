@@ -91,8 +91,16 @@ export default function ClozeModeView({
     [activeBlankIdx]
   );
 
-  const { isListening, isSupported, stopListening, toggleListening } =
-    useSpeechRecognition(handleVoiceTranscript);
+  const {
+    isListening,
+    isTranscribing,
+    interimText,
+    error: speechError,
+    stopListening,
+    toggleListening,
+  } = useSpeechRecognition(handleVoiceTranscript, {
+    geminiApiKey: state.deadlines.geminiApiKey,
+  });
 
   if (pool.length === 0) return null;
 
@@ -227,29 +235,33 @@ export default function ClozeModeView({
             {current.question.n}: <strong className="text-slate-200">{current.question.text}</strong>
           </div>
           <div className="flex items-center gap-2">
-            {isSupported && (
-              <button
-                type="button"
-                onClick={toggleListening}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                  isListening
-                    ? "bg-rose-600 text-white animate-pulse"
-                    : "border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                }`}
-              >
-                {isListening ? (
-                  <>
-                    <MicOff className="h-3.5 w-3.5" />
-                    <span>Голос включен (в пропуск #{activeBlankIdx + 1})</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Продиктовать пропуск</span>
-                  </>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={isTranscribing}
+              onClick={toggleListening}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 ${
+                isListening
+                  ? "bg-rose-600 text-white animate-pulse"
+                  : "border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+              }`}
+            >
+              {isTranscribing ? (
+                <>
+                  <Mic className="h-3.5 w-3.5 animate-pulse" />
+                  <span>Расшифровка...</span>
+                </>
+              ) : isListening ? (
+                <>
+                  <MicOff className="h-3.5 w-3.5" />
+                  <span>Стоп (пропуск #{activeBlankIdx + 1})</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Продиктовать пропуск</span>
+                </>
+              )}
+            </button>
             <button
               type="button"
               onClick={() => setShowHint(!showHint)}
@@ -260,6 +272,21 @@ export default function ClozeModeView({
             </button>
           </div>
         </div>
+
+        {(speechError || interimText) && (
+          <div className="space-y-1.5">
+            {speechError && (
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 text-xs text-rose-300 font-medium">
+                {speechError}
+              </div>
+            )}
+            {interimText && (
+              <div className="rounded-lg border border-indigo-500/30 bg-indigo-950/60 px-3.5 py-1.5 text-xs italic text-indigo-200">
+                Распознается в пропуск #{activeBlankIdx + 1}: «{interimText}...»
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Interactive Sentence with Inline Blank Inputs */}
         <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-6 sm:p-8 read-lg leading-loose text-slate-100 font-medium">

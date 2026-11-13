@@ -140,11 +140,15 @@ export default function TicketSimulatorView({
   const {
     isListening,
     isSupported,
+    isTranscribing,
+    mode: speechMode,
     interimText,
     error: speechError,
     stopListening,
     toggleListening,
-  } = useSpeechRecognition(handleVoiceChunk);
+  } = useSpeechRecognition(handleVoiceChunk, {
+    geminiApiKey: state.deadlines.geminiApiKey,
+  });
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -560,14 +564,20 @@ ${currentAnswer}
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                disabled={isTranscribing}
                 onClick={toggleListening}
-                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-xs sm:text-sm font-black transition shadow-md ${
+                className={`inline-flex items-center gap-2 rounded-xl px-5 py-3 text-xs sm:text-sm font-black transition shadow-md disabled:opacity-60 ${
                   isListening
                     ? "bg-rose-600 text-white animate-pulse shadow-rose-500/30"
                     : "bg-indigo-600 text-white hover:bg-indigo-500"
                 }`}
               >
-                {isListening ? (
+                {isTranscribing ? (
+                  <>
+                    <Mic className="h-5 w-5 animate-pulse" />
+                    <span>Расшифровка аудио...</span>
+                  </>
+                ) : isListening ? (
                   <>
                     <MicOff className="h-5 w-5" />
                     <span>Остановить запись</span>
@@ -580,15 +590,21 @@ ${currentAnswer}
                 )}
               </button>
               <div className="text-xs sm:text-sm text-slate-300">
-                {isListening ? (
+                {isTranscribing ? (
+                  <span className="text-indigo-300 font-bold">
+                    Расшифровываю записанный ответ...
+                  </span>
+                ) : isListening ? (
                   <span className="text-rose-400 font-bold">
-                    Идет распознавание речи... Говорите как на устном экзамене.
+                    {speechMode === "audio"
+                      ? "Идет запись аудио... Нажмите «Остановить запись», когда закончите."
+                      : "Идет распознавание речи... Говорите как на устном экзамене."}
                   </span>
                 ) : isSupported ? (
                   <span>Нажмите микрофон для ответа или вводите тезисы ниже</span>
                 ) : (
                   <span className="text-amber-400">
-                    Для голосового ввода используйте Chrome или Edge
+                    Для голосового ввода используйте Chrome / Edge / Safari или добавьте Gemini ключ
                   </span>
                 )}
               </div>
