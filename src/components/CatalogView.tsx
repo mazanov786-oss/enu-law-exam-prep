@@ -5,18 +5,21 @@ import {
   CoverageStatus,
   ExamDatabase,
   ExamQuestion,
+  ErrorRecord,
   SubjectId,
   UserStudyState,
 } from "@/types/exam";
 import {
   Search,
   BookOpen,
+  PenLine,
   CheckCircle2,
   AlertTriangle,
   Sparkles,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import SelfRecallPanel from "./SelfRecallPanel";
 
 interface CatalogViewProps {
   db: ExamDatabase;
@@ -24,6 +27,8 @@ interface CatalogViewProps {
   activeSubject: SubjectId;
   onSelectSubject: (s: SubjectId) => void;
   onToggleMastered: (questionId: string) => void;
+  onRecordQuestionScore: (questionId: string, score: number) => void;
+  onAddError: (err: Omit<ErrorRecord, "id" | "timestamp" | "resolved">) => void;
 }
 
 export default function CatalogView({
@@ -32,11 +37,14 @@ export default function CatalogView({
   activeSubject,
   onSelectSubject,
   onToggleMastered,
+  onRecordQuestionScore,
+  onAddError,
 }: CatalogViewProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [moduleFilter, setModuleFilter] = useState<number | "all">("all");
   const [coverageFilter, setCoverageFilter] = useState<CoverageStatus | "all">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [recallModeMap, setRecallModeMap] = useState<Record<string, boolean>>({});
 
   const filteredQuestions = useMemo(() => {
     const qLower = searchQuery.trim().toLowerCase();
@@ -189,7 +197,7 @@ export default function CatalogView({
                       Статьи: {q.articles.slice(0, 3).join(", ")}
                     </span>
                   </div>
-                  <h3 className="text-base sm:text-lg font-bold text-white">{q.text}</h3>
+                  <h3 className="read-title font-bold text-white">{q.text}</h3>
                   {q.gaps && (
                     <div className="text-xs sm:text-sm text-amber-300/90 font-medium">
                       <strong>Что дополнено в конспект:</strong> {q.gaps}
@@ -223,14 +231,68 @@ export default function CatalogView({
               </div>
 
               {isExpanded && (
-                <div className="border-t border-slate-800 p-5 space-y-5 bg-slate-950/50 rounded-b-2xl">
+                <div className="border-t border-slate-800 p-5 sm:p-6 space-y-5 bg-slate-950/50 rounded-b-2xl">
+                  {/* Mode Switcher: Study vs Active Recall */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/80 p-2">
+                    <div className="inline-flex rounded-lg bg-slate-950 p-1 gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRecallModeMap((prev) => ({ ...prev, [q.id]: false }))
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs sm:text-sm font-bold transition ${
+                          !recallModeMap[q.id]
+                            ? "bg-indigo-600 text-white shadow-sm"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>Конспект</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRecallModeMap((prev) => ({ ...prev, [q.id]: true }))
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs sm:text-sm font-bold transition ${
+                          recallModeMap[q.id]
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <PenLine className="h-3.5 w-3.5" />
+                        <span>Написать ответ по памяти</span>
+                      </button>
+                    </div>
+
+                    {p?.oralScoreBest !== undefined && (
+                      <span className="text-xs font-semibold text-emerald-300 px-2">
+                        Лучшая самопроверка: {p.oralScoreBest}%
+                      </span>
+                    )}
+                  </div>
+
+                  {recallModeMap[q.id] ? (
+                    <SelfRecallPanel
+                      question={q}
+                      isMastered={isMastered}
+                      geminiApiKey={state.deadlines.geminiApiKey}
+                      onRecordQuestionScore={onRecordQuestionScore}
+                      onToggleMastered={onToggleMastered}
+                      onAddError={onAddError}
+                      onBackToLecture={() =>
+                        setRecallModeMap((prev) => ({ ...prev, [q.id]: false }))
+                      }
+                    />
+                  ) : (
+                    <>
                   {/* Plan & Notes */}
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-2">
                       <div className="text-xs font-bold uppercase tracking-wider text-indigo-400">
                         План устного ответа
                       </div>
-                      <ol className="list-decimal list-inside space-y-1 text-xs sm:text-sm text-slate-200">
+                      <ol className="list-decimal list-inside space-y-1.5 read-sm text-slate-200">
                         {q.plan.map((pt, i) => (
                           <li key={i}>{pt.replace(/^\d+\.\s*/, "")}</li>
                         ))}
@@ -266,27 +328,42 @@ export default function CatalogView({
 
                   {/* Full Model Answer */}
                   <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-2">
-                    <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-300">
+                    <div className="text-xs font-black uppercase tracking-wider text-indigo-300">
                       Эталонный устный ответ на экзамене
                     </div>
-                    <div className="text-base sm:text-lg text-slate-100 whitespace-pre-line leading-relaxed">
+                    <div className="read-body text-slate-100 whitespace-pre-line">
                       {q.answer}
+                    </div>
+                    <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs text-slate-400">
+                        Прочитали? Закрепите материал активным воспроизведением:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRecallModeMap((prev) => ({ ...prev, [q.id]: true }))
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-emerald-500 transition shadow-sm"
+                      >
+                        <PenLine className="h-3.5 w-3.5" />
+                        <span>Скрыть конспект и написать ответ по памяти</span>
+                      </button>
                     </div>
                   </div>
 
                   {/* Practical Case Study */}
                   {q.caseStudy && (
                     <div className="rounded-xl border border-indigo-500/30 bg-slate-900/90 p-5 space-y-3">
-                      <div className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-300">
+                      <div className="text-xs font-black uppercase tracking-wider text-indigo-300">
                         ⚡ Практический казус к вопросу: {q.caseStudy.caseTitle}
                       </div>
-                      <div className="text-sm sm:text-base text-slate-200 leading-relaxed bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+                      <div className="read-sm text-slate-200 bg-slate-950/70 p-4 rounded-xl border border-slate-800">
                         <strong className="text-white block mb-1">Фабула:</strong> {q.caseStudy.facts}
                         <div className="mt-2.5 pt-2 border-t border-slate-800 text-amber-300 font-bold">
                           Вопрос: {q.caseStudy.question}
                         </div>
                       </div>
-                      <div className="text-sm sm:text-base text-slate-200 leading-relaxed bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/30">
+                      <div className="read-sm text-slate-200 bg-emerald-950/20 p-4 rounded-xl border border-emerald-500/30">
                         <strong className="text-emerald-300 block mb-1">Решение и квалификация:</strong>
                         <div className="whitespace-pre-line text-slate-100">{q.caseStudy.solution}</div>
                         <div className="mt-2 text-xs font-mono text-emerald-400">
@@ -310,16 +387,18 @@ export default function CatalogView({
                     </div>
 
                     <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/15 p-5 space-y-2">
-                      <div className="text-xs sm:text-sm font-bold text-indigo-300">
-                        Дополнительные вопросы экзаменатора:
+                      <div className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                        Дополнительные вопросы экзаменатора
                       </div>
-                      <ul className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
+                      <ul className="list-decimal list-inside space-y-1.5 read-sm text-slate-200">
                         {q.followups.map((f, i) => (
                           <li key={i}>{f}</li>
                         ))}
                       </ul>
                     </div>
                   </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

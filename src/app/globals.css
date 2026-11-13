@@ -7,28 +7,66 @@
 }
 
 html {
-  font-size: 17.5px; /* Default larger base font size for crisp readability */
+  font-size: 16px;
   scroll-behavior: smooth;
+  --read-sm: 0.9375rem;
+  --read-base: 1.0625rem;
+  --read-lg: 1.1875rem;
+  --read-title: 1.3125rem;
+  --read-lh: 1.72;
 }
 
 html.font-size-md {
-  font-size: 16px;
+  --read-sm: 0.9375rem;
+  --read-base: 1.0625rem;
+  --read-lg: 1.1875rem;
+  --read-title: 1.3125rem;
+  --read-lh: 1.7;
 }
 
 html.font-size-lg {
-  font-size: 18.5px;
+  --read-sm: 1.0625rem;
+  --read-base: 1.1875rem;
+  --read-lg: 1.3125rem;
+  --read-title: 1.5rem;
+  --read-lh: 1.75;
 }
 
 html.font-size-xl {
-  font-size: 21px;
+  --read-sm: 1.15rem;
+  --read-base: 1.3125rem;
+  --read-lg: 1.45rem;
+  --read-title: 1.65rem;
+  --read-lh: 1.8;
 }
 
 body {
   background-color: #020617;
   color: #f8fafc;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  letter-spacing: -0.011em;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.read-sm {
+  font-size: var(--read-sm);
+  line-height: 1.58;
+}
+
+.read-body {
+  font-size: var(--read-base);
+  line-height: var(--read-lh);
+}
+
+.read-lg {
+  font-size: var(--read-lg);
+  line-height: 1.65;
+}
+
+.read-title {
+  font-size: var(--read-title);
+  line-height: 1.38;
 }
 
 /* Custom sleek scrollbar */

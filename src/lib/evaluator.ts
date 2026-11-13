@@ -405,7 +405,8 @@ export function generateExamTicket(
   allQuestions: ExamQuestion[],
   subject: SubjectId,
   progressMap: Record<string, QuestionProgress>,
-  mode: "smart" | "random" | "weak" = "smart"
+  mode: "smart" | "random" | "weak" = "smart",
+  excludeHistoryIds?: Set<string>
 ): [ExamQuestion, ExamQuestion, ExamQuestion] {
   const subjQuestions = allQuestions
     .filter((q) => q.subject === subject)
@@ -420,31 +421,46 @@ export function generateExamTicket(
   const bucket3 = mod2.length > 0 ? mod2 : subjQuestions.slice(Math.floor(subjQuestions.length * 0.66));
 
   const pickFromBucket = (bucket: ExamQuestion[], excludeIds: Set<string>): ExamQuestion => {
-    const candidates = bucket.filter((q) => !excludeIds.has(q.id));
-    const pool = candidates.length > 0 ? candidates : subjQuestions.filter((q) => !excludeIds.has(q.id));
+    const freshCandidates = bucket.filter(
+      (q) => !excludeIds.has(q.id) && (!excludeHistoryIds || !excludeHistoryIds.has(q.id))
+    );
+    const candidates =
+      freshCandidates.length > 0
+        ? freshCandidates
+        : bucket.filter((q) => !excludeIds.has(q.id));
+    const pool =
+      candidates.length > 0
+        ? candidates
+        : subjQuestions.filter((q) => !excludeIds.has(q.id));
 
     if (mode === "random") {
       return pool[Math.floor(Math.random() * pool.length)];
     }
 
-    // Weight questions by weakness / unseen status
-    const weighted = pool.map((q) => {
+    // Weighted random sampling across the entire pool (Efraimidis-Spirakis)
+    // so weaker/unseen topics appear more often without locking to a fixed top-6 subset.
+    let bestQ = pool[0];
+    let bestKey = -1;
+    for (const q of pool) {
       const p = progressMap[q.id];
-      let weight = 5;
-      if (!p || p.status === "unseen") weight = 10;
-      else if (p.status === "learning") weight = 14;
-      else if (p.status === "review") weight = 7;
-      else if (p.status === "mastered") weight = mode === "weak" ? 1 : 2;
+      let weight = 3;
+      if (!p || p.status === "unseen") weight = 5;
+      else if (p.status === "learning") weight = 7;
+      else if (p.status === "review") weight = 4;
+      else if (p.status === "mastered") weight = mode === "weak" ? 0.5 : 1.5;
 
       if (p && (p.mcqWrong > p.mcqCorrect || p.clozeWrong > p.clozeCorrect)) {
-        weight += 8;
+        weight += 4;
       }
-      return { q, weight: weight + Math.random() * 4 };
-    });
+      const u = Math.max(Number.MIN_VALUE, Math.random());
+      const key = Math.pow(u, 1 / weight);
+      if (key > bestKey) {
+        bestKey = key;
+        bestQ = q;
+      }
+    }
 
-    weighted.sort((a, b) => b.weight - a.weight);
-    const topSlice = weighted.slice(0, Math.min(6, weighted.length));
-    return topSlice[Math.floor(Math.random() * topSlice.length)].q;
+    return bestQ;
   };
 
   const used = new Set<string>();

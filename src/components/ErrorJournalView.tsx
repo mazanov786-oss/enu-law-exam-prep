@@ -161,8 +161,8 @@ export default function ErrorJournalView({
                   </span>
                   <span className="text-slate-400 font-mono">{q.articles.slice(0, 2).join(", ")}</span>
                 </div>
-                <h4 className="text-base sm:text-lg font-bold text-white">{q.text}</h4>
-                <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-amber-200/90 pt-1 leading-relaxed">
+                <h4 className="read-title font-bold text-white">{q.text}</h4>
+                <ul className="list-disc list-inside space-y-1.5 read-sm text-amber-200/90 pt-1">
                   {q.traps.map((t, idx) => (
                     <li key={idx}>{t}</li>
                   ))}

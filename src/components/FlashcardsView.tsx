@@ -8,6 +8,7 @@ import {
   SubjectId,
   UserStudyState,
 } from "@/types/exam";
+import { generateRandomSeed, shuffleWithSeed } from "@/lib/shuffle";
 import {
   BrainCircuit,
   RotateCcw,
@@ -42,7 +43,7 @@ export default function FlashcardsView({
   const [moduleFilter, setModuleFilter] = useState<number | "all">("all");
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [flipped, setFlipped] = useState<boolean>(false);
-  const [seed, setSeed] = useState<number>(1);
+  const [seed, setSeed] = useState<number>(() => generateRandomSeed());
   const [reviewedCount, setReviewedCount] = useState<number>(0);
 
   const deck = useMemo(() => {
@@ -58,12 +59,7 @@ export default function FlashcardsView({
         });
       });
     }
-    const copy = [...list];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.abs(Math.sin(seed * 555 + i * 19)) * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
+    return shuffleWithSeed(list, seed);
   }, [db.questions, activeSubject, moduleFilter, seed]);
 
   useEffect(() => {
@@ -135,7 +131,7 @@ export default function FlashcardsView({
           </select>
 
           <button
-            onClick={() => setSeed((s) => s + 1)}
+            onClick={() => setSeed(generateRandomSeed())}
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
           >
             <RotateCcw className="h-3.5 w-3.5" />
@@ -186,7 +182,7 @@ export default function FlashcardsView({
             <span>{flipped ? "ОТВЕТ (ОБОРОТНАЯ СТОРОНА)" : "ВОПРОС КАРТОЧКИ"}</span>
           </div>
           <div
-            className={`text-2xl sm:text-3xl font-black leading-relaxed max-w-3xl mx-auto tracking-tight ${
+            className={`read-title font-black max-w-3xl mx-auto tracking-tight ${
               flipped ? "text-emerald-300" : "text-white"
             }`}
           >

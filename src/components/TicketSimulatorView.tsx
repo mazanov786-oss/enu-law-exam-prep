@@ -73,7 +73,30 @@ export default function TicketSimulatorView({
 
   const drawNewTicket = useCallback(
     (subj: SubjectId = activeSubject, mode: "smart" | "random" | "weak" = ticketMode) => {
-      const drawn = generateExamTicket(db.questions, subj, state.progress, mode);
+      const storageKey = `enu_recent_ticket_q_${subj}`;
+      let recentIds: string[] = [];
+      try {
+        const raw = sessionStorage.getItem(storageKey);
+        if (raw) recentIds = JSON.parse(raw);
+      } catch {
+        recentIds = [];
+      }
+
+      const drawn = generateExamTicket(
+        db.questions,
+        subj,
+        state.progress,
+        mode,
+        new Set(recentIds)
+      );
+
+      try {
+        const updatedRecent = [...recentIds, ...drawn.map((q) => q.id)].slice(-24);
+        sessionStorage.setItem(storageKey, JSON.stringify(updatedRecent));
+      } catch {
+        // ignore storage errors
+      }
+
       setQuestions(drawn);
       setActiveIdx(0);
       setAnswers(["", "", ""]);
@@ -464,7 +487,7 @@ ${currentAnswer}
                 <span>•</span>
                 <span>Конспект: {currentQuestion.notes.join(", ")}</span>
               </div>
-              <h3 className="mt-2 text-xl sm:text-2xl font-black text-white leading-snug">
+              <h3 className="mt-2 read-title font-black text-white">
                 {currentQuestion.n}. {currentQuestion.text}
               </h3>
             </div>
@@ -479,7 +502,7 @@ ${currentAnswer}
           </div>
 
           {showPlanHint && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-sm sm:text-base space-y-2">
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 read-sm space-y-2">
               <div className="font-black text-amber-300">
                 Рекомендуемый план устного ответа на экзамене ЕНУ:
               </div>
@@ -508,7 +531,7 @@ ${currentAnswer}
                 </button>
               </div>
 
-              <div className="text-sm sm:text-base text-slate-200 leading-relaxed bg-slate-900/90 rounded-xl p-4 sm:p-5 border border-slate-800/80">
+              <div className="read-sm text-slate-200 bg-slate-900/90 rounded-xl p-4 sm:p-5 border border-slate-800/80">
                 <strong className="text-white block mb-1.5 font-bold">Фабула дела (ситуационная задача):</strong>
                 {currentQuestion.caseStudy.facts}
                 <div className="mt-3 pt-2.5 border-t border-slate-800 text-amber-300 font-bold">
@@ -517,7 +540,7 @@ ${currentAnswer}
               </div>
 
               {showCaseSolution && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 sm:p-5 space-y-2.5 text-sm sm:text-base">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 sm:p-5 space-y-2.5 read-sm">
                   <strong className="text-emerald-300 block font-black">
                     Юридический анализ и квалификация казуса:
                   </strong>
@@ -602,7 +625,7 @@ ${currentAnswer}
                 setAnswers(next);
               }}
               placeholder="Отвечайте устно через микрофон или введите ключевые тезисы: определение, статьи УК/ГК РК, классификация, решение задачи..."
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 sm:p-5 text-base sm:text-lg text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none leading-relaxed font-normal"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 p-4 sm:p-5 read-body text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-normal"
             />
             {interimText && (
               <div className="mt-1 rounded-lg bg-indigo-950/70 border border-indigo-500/30 px-3.5 py-2 text-xs sm:text-sm italic text-indigo-200">
@@ -824,7 +847,7 @@ ${currentAnswer}
                     <span>Слушать</span>
                   </button>
                 </div>
-                <div className="text-base sm:text-lg text-slate-100 whitespace-pre-line leading-relaxed font-normal">
+                <div className="read-body text-slate-100 whitespace-pre-line font-normal">
                   {currentQuestion.answer}
                 </div>
               </div>

@@ -21,6 +21,11 @@ import {
   Scale,
   Sparkles,
 } from "lucide-react";
+import {
+  generateRandomSeed,
+  hashStringSeed,
+  shuffleWithSeed,
+} from "@/lib/shuffle";
 
 interface FlattenedMcq {
   id: string;
@@ -54,7 +59,7 @@ export default function TestModeView({
   const [sessionCorrect, setSessionCorrect] = useState<number>(0);
   const [sessionTotal, setSessionTotal] = useState<number>(0);
   const [streak, setStreak] = useState<number>(0);
-  const [seed, setSeed] = useState<number>(1);
+  const [seed, setSeed] = useState<number>(() => generateRandomSeed());
 
   const pool = useMemo(() => {
     const errorQuestionIds = new Set(
@@ -90,15 +95,7 @@ export default function TestModeView({
       });
     }
 
-    // Deterministic shuffle based on seed
-    const copy = [...list];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(
-        Math.abs(Math.sin(seed * 999 + i * 37)) * (i + 1)
-      );
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
+    return shuffleWithSeed(list, seed);
   }, [db.questions, activeSubject, moduleFilter, onlyWeak, onlyHard, seed, state.errors, state.progress]);
 
   useEffect(() => {
@@ -106,7 +103,20 @@ export default function TestModeView({
     setSelectedOption(null);
   }, [activeSubject, moduleFilter, onlyWeak, onlyHard, seed]);
 
-  if (pool.length === 0) {
+  const current = pool.length > 0 ? pool[currentIndex % pool.length] : null;
+
+  // Shuffle options using Mulberry32 seeded by question ID + current random seed
+  const displayOptions = useMemo(() => {
+    if (!current) return [];
+    const items = current.item.options.map((text, originalIndex) => ({
+      text,
+      originalIndex,
+    }));
+    const optSeed = hashStringSeed(`${current.id}:${current.item.q}`, seed);
+    return shuffleWithSeed(items, optSeed);
+  }, [current, seed]);
+
+  if (!current) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center space-y-4">
         <p className="text-lg font-bold text-white">
@@ -130,29 +140,6 @@ export default function TestModeView({
       </div>
     );
   }
-
-  const current = pool[currentIndex % pool.length];
-
-  // Deterministically shuffle options based on question ID + question prompt + seed
-  // so each question displays options in pseudo-random order (uniform ~25% distribution across А, Б, В, Г)
-  const displayOptions = useMemo(() => {
-    if (!current) return [];
-    const items = current.item.options.map((text, originalIndex) => ({
-      text,
-      originalIndex,
-    }));
-    let hash = 0;
-    const str = `${current.id}:${current.item.q}:${seed}`;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0;
-    }
-    for (let i = items.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.abs(Math.sin(hash * 41 + i * 17)) * (i + 1));
-      [items[i], items[j]] = [items[j], items[i]];
-    }
-    return items;
-  }, [current, seed]);
 
   const isAnswered = selectedOption !== null;
   const isCorrect =
@@ -270,7 +257,7 @@ export default function TestModeView({
 
           {/* Reshuffle */}
           <button
-            onClick={() => setSeed((s) => s + 1)}
+            onClick={() => setSeed(generateRandomSeed())}
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs sm:text-sm font-medium text-slate-200 hover:bg-slate-700 transition"
           >
             <RotateCcw className="h-4 w-4" />
@@ -328,7 +315,7 @@ export default function TestModeView({
               </span>
             </div>
           </div>
-          <h3 className="text-xl sm:text-2xl font-black text-white leading-relaxed pt-2">
+          <h3 className="read-title font-black text-white pt-2">
             {current.item.q}
           </h3>
         </div>
@@ -357,12 +344,12 @@ export default function TestModeView({
                 key={displayIdx}
                 disabled={isAnswered}
                 onClick={() => handleSelectOption(displayIdx)}
-                className={`w-full flex items-start gap-3.5 rounded-xl border p-4 sm:p-5 text-left text-base sm:text-lg transition ${btnStyle}`}
+                className={`w-full flex items-start gap-3.5 rounded-xl border p-4 sm:p-5 text-left read-body transition ${btnStyle}`}
               >
-                <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg border border-current/30 text-sm sm:text-base font-extrabold">
+                <span className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg border border-current/30 text-sm font-extrabold">
                   {["А", "Б", "В", "Г"][displayIdx] || displayIdx + 1}
                 </span>
-                <span className="flex-1 leading-relaxed">{optItem.text}</span>
+                <span className="flex-1">{optItem.text}</span>
                 {isAnswered && isThisCorrect && (
                   <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0 mt-0.5" />
                 )}
@@ -397,7 +384,7 @@ export default function TestModeView({
                   </span>
                 )}
               </div>
-              <div className="text-sm sm:text-base text-slate-100 leading-relaxed">
+              <div className="read-sm text-slate-100">
                 <strong className="text-indigo-300">Нормативное обоснование:</strong> {current.item.explain}
               </div>
               {current.question.traps.length > 0 && (

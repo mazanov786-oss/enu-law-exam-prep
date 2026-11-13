@@ -329,8 +329,8 @@ export default function ExamPrepApp() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950">
       {/* Sticky Top Navigation Bar */}
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-md shadow-sm">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2.5 px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setActiveTab("dashboard")}
@@ -420,14 +420,15 @@ export default function ExamPrepApp() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/70 pt-2.5">
+            {/* Navigation Tabs first on clean full row */}
             {/* Desktop Font Size Switcher */}
-            <div className="hidden lg:flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
-              <span className="px-2 text-xs font-semibold text-slate-400">Шрифт:</span>
+            <div className="hidden lg:flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/90 p-1 order-2">
+              <span className="px-2 text-xs font-semibold text-slate-400">Текст:</span>
               <button
                 type="button"
                 onClick={() => handleSetFontSize("md")}
-                title="Стандартный размер (16px)"
+                title="Компактный размер текста для чтения"
                 className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
                   (state.fontSize || "lg") === "md"
                     ? "bg-indigo-600 text-white shadow-sm"
@@ -439,26 +440,26 @@ export default function ExamPrepApp() {
               <button
                 type="button"
                 onClick={() => handleSetFontSize("lg")}
-                title="Крупный комфортный (18.5px)"
+                title="Оптимальный крупный текст для чтения"
                 className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
                   (state.fontSize || "lg") === "lg"
                     ? "bg-indigo-600 text-white shadow-sm"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                А (18px)
+                А
               </button>
               <button
                 type="button"
                 onClick={() => handleSetFontSize("xl")}
-                title="Экстра-крупный (21px)"
+                title="Увеличенный текст для чтения"
                 className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${
                   state.fontSize === "xl"
                     ? "bg-indigo-600 text-white shadow-sm"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                А+ (21px)
+                А+
               </button>
             </div>
 
@@ -467,7 +468,7 @@ export default function ExamPrepApp() {
               type="button"
               onClick={() => setIsSyncModalOpen(true)}
               title="Синхронизация между ПК, ноутбуком и телефоном"
-              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:border-slate-700 transition"
+              className="hidden lg:flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white hover:border-slate-700 transition order-3"
             >
               {isSyncing ? (
                 <RefreshCw className="h-4 w-4 animate-spin text-indigo-400" />
@@ -482,7 +483,7 @@ export default function ExamPrepApp() {
             </button>
 
             {/* Navigation Tabs */}
-            <nav className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
+            <nav className="flex flex-1 items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 order-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -602,6 +603,8 @@ export default function ExamPrepApp() {
             activeSubject={activeSubject}
             onSelectSubject={setActiveSubject}
             onToggleMastered={handleToggleMastered}
+            onRecordQuestionScore={handleRecordQuestionScore}
+            onAddError={handleAddError}
           />
         )}
       </main>
